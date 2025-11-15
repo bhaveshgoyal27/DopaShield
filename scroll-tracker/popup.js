@@ -10,7 +10,7 @@ function formatTime(seconds) {
 }
 
 function getScrollScore(scrolls, time) {
-  if (time === 0) return 0;
+  if (time === 0 || scrolls === 0) return 0;
   const scrollsPerMinute = (scrolls / time) * 60;
   return Math.round(scrollsPerMinute);
 }
@@ -51,7 +51,7 @@ function renderStats(stats) {
     let html = '';
     
     // Current session section
-    if (currentStats) {
+    if (currentStats && (currentStats.totalScrolls > 0 || currentStats.totalTime > 0)) {
       const score = getScrollScore(currentStats.totalScrolls, currentStats.totalTime);
       const scoreClass = getScoreClass(score);
       
@@ -69,13 +69,13 @@ function renderStats(stats) {
             </div>
             <div class="stat-box">
               <span class="stat-value">${formatTime(currentStats.totalTime)}</span>
-              <span class="stat-label">Time</span>
+              <span class="stat-label">Active Time</span>
             </div>
           </div>
           <div style="margin-top: 15px; text-align: center;">
-            <span class="scroll-score ${scoreClass}">
+            ${score > 0 ? `<span class="scroll-score ${scoreClass}">
               Score: ${score} scrolls/min
-            </span>
+            </span>` : '<span class="scroll-score score-low">No scrolling yet</span>'}
           </div>
         </div>
       `;
@@ -106,11 +106,11 @@ function renderStats(stats) {
               <span>${data.totalScrolls} scrolls</span>
               <span>${formatTime(data.totalTime)}</span>
             </div>
-            <div style="margin-top: 8px;">
+            ${score > 0 ? `<div style="margin-top: 8px;">
               <span class="scroll-score ${scoreClass}" style="font-size: 11px; padding: 3px 8px;">
                 ${score} scrolls/min
               </span>
-            </div>
+            </div>` : ''}
           </div>
         `;
       });
@@ -136,9 +136,18 @@ setInterval(() => {
 
 // Reset button
 document.getElementById('resetBtn').addEventListener('click', () => {
-  if (confirm('Reset all tracking data?')) {
-    chrome.runtime.sendMessage({ type: 'RESET_STATS' }, () => {
-      renderStats({});
+  if (confirm('Reset all tracking data? This will clear all stats and restart tracking.')) {
+    chrome.runtime.sendMessage({ type: 'RESET_STATS' }, (response) => {
+      if (response && response.success) {
+        // Clear the display immediately
+        renderStats({});
+        // Reload after a short delay to show the reset worked
+        setTimeout(() => {
+          chrome.runtime.sendMessage({ type: 'GET_STATS' }, (response) => {
+            renderStats(response.stats);
+          });
+        }, 500);
+      }
     });
   }
 });

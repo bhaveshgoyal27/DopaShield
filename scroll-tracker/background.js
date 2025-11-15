@@ -27,12 +27,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         totalScrolls: 0,
         totalRapidScrolls: 0,
         totalTime: 0,
-        sessions: 0,
         lastVisit: Date.now(),
         onShorts: isOnShorts
       };
     }
     
+    // Update with current session data
     siteStats[hostname].totalScrolls = scrollCount;
     siteStats[hostname].totalRapidScrolls = rapidScrollCount;
     siteStats[hostname].totalTime = timeSpent;
@@ -47,8 +47,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ stats: siteStats });
   } else if (message.type === 'RESET_STATS') {
     siteStats = {};
-    chrome.storage.local.set({ siteStats: {} });
-    sendResponse({ success: true });
+    chrome.storage.local.set({ siteStats: {} }, () => {
+      // Notify all content scripts to reset their session data
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          if (tab.url && (tab.url.includes('youtube.com') || 
+              tab.url.includes('instagram.com') || 
+              tab.url.includes('tiktok.com') || 
+              tab.url.includes('linkedin.com'))) {
+            chrome.tabs.sendMessage(tab.id, { type: 'RESET_CURRENT_SESSION' }).catch(() => {});
+          }
+        });
+      });
+      sendResponse({ success: true });
+    });
+    return true; // Keep channel open for async response
   }
   
   return true; // Keep message channel open for async response

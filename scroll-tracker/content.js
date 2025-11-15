@@ -1,15 +1,18 @@
 // Content script that tracks scrolling and time
 let scrollCount = 0;
 let lastScrollY = window.scrollY;
-let startTime = Date.now();
+let sessionStartTime = Date.now();
+let lastActiveTime = Date.now();
 let isActive = true;
 let rapidScrollCount = 0;
 let lastScrollTime = Date.now();
+let actualScrollTime = 0; // Track actual time spent scrolling
 
 const SCROLL_THRESHOLD = 100; // pixels
 const RAPID_SCROLL_TIME = 100; // ms
 const RAPID_SCROLL_LIMIT = 50; // rapid scrolls to trigger warning
 const CHECK_INTERVAL = 5000; // check every 5 seconds
+const INACTIVE_THRESHOLD = 3000; // 3 seconds of no scrolling = inactive
 
 // Detect if on shorts/reels
 function isOnShorts() {
@@ -21,6 +24,8 @@ function isOnShorts() {
 
 // Track scrolling
 let scrollTimeout;
+let activeScrollTimeout;
+
 window.addEventListener('scroll', () => {
   const currentScrollY = window.scrollY;
   const scrollDiff = Math.abs(currentScrollY - lastScrollY);
@@ -33,8 +38,18 @@ window.addEventListener('scroll', () => {
       rapidScrollCount++;
     }
     lastScrollTime = now;
+    lastActiveTime = now;
     
     lastScrollY = currentScrollY;
+    
+    // Track active scroll time
+    clearTimeout(activeScrollTimeout);
+    activeScrollTimeout = setTimeout(() => {
+      // Add the time since last scroll started
+      if (isActive) {
+        actualScrollTime += (Date.now() - lastActiveTime) / 1000;
+      }
+    }, INACTIVE_THRESHOLD);
   }
   
   // Save data periodically
@@ -52,13 +67,20 @@ function updateTimeSpent() {
 // Save data to storage
 async function saveData() {
   const hostname = window.location.hostname;
-  const timeSpent = Math.floor((Date.now() - startTime) / 1000); // seconds
+  
+  // Calculate actual active time (only count time when scrolling happened recently)
+  const timeSinceLastScroll = (Date.now() - lastActiveTime) / 1000;
+  let currentActiveTime = actualScrollTime;
+  
+  if (timeSinceLastScroll < INACTIVE_THRESHOLD / 1000 && isActive) {
+    currentActiveTime += timeSinceLastScroll;
+  }
   
   const data = {
     hostname,
     scrollCount,
     rapidScrollCount,
-    timeSpent,
+    timeSpent: Math.floor(currentActiveTime), // Use actual active scroll time
     isOnShorts: isOnShorts(),
     timestamp: Date.now()
   };
@@ -69,11 +91,14 @@ async function saveData() {
 
 // Check for excessive scrolling
 function checkScrollingBehavior() {
-  const timeSpent = (Date.now() - startTime) / 1000 / 60; // minutes
-  const scrollsPerMinute = timeSpent > 0 ? scrollCount / timeSpent : 0;
+  // Only check if we have actual scroll activity
+  if (scrollCount === 0 || actualScrollTime === 0) return;
+  
+  const timeSpentMinutes = actualScrollTime / 60;
+  const scrollsPerMinute = scrollCount / timeSpentMinutes;
   
   // Trigger warning if excessive scrolling detected
-  if ((scrollsPerMinute > 30 && timeSpent > 2) || rapidScrollCount > RAPID_SCROLL_LIMIT) {
+  if ((scrollsPerMinute > 30 && timeSpentMinutes > 2) || rapidScrollCount > RAPID_SCROLL_LIMIT) {
     showWarning();
     rapidScrollCount = 0; // Reset after warning
   }
@@ -155,12 +180,27 @@ document.addEventListener('visibilitychange', () => {
     saveData();
   } else {
     isActive = true;
-    startTime = Date.now();
+    sessionStartTime = Date.now();
+    lastActiveTime = Date.now();
   }
 });
 
 // Save data before unload
 window.addEventListener('beforeunload', saveData);
+
+// Listen for reset message from popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'RESET_CURRENT_SESSION') {
+    scrollCount = 0;
+    rapidScrollCount = 0;
+    actualScrollTime = 0;
+    sessionStartTime = Date.now();
+    lastActiveTime = Date.now();
+    saveData();
+    sendResponse({ success: true });
+  }
+  return true;
+});
 
 // Initial save
 saveData();
