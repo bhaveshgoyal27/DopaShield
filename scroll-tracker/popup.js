@@ -48,6 +48,10 @@ function renderStats(stats, totalPoints = 0) {
           <li>🎁 25 bonus points for taking 5+ minute breaks</li>
           <li>💎 Use points in the marketplace (coming soon!)</li>
         </ul>
+        <strong style="margin-top: 10px; display: block;">⚠️ How to Lose Points:</strong>
+        <ul>
+          <li>❌ -50 points if you ignore warnings and continue doom-scrolling</li>
+        </ul>
       </div>
     `;
     return;
@@ -147,6 +151,10 @@ function renderStats(stats, totalPoints = 0) {
           <li>⭐ 5 points per minute of healthy browsing (less than 15 scrolls/min)</li>
           <li>🎁 25 bonus points for taking 5+ minute breaks</li>
           <li>💎 Use points in the marketplace (coming soon!)</li>
+        </ul>
+        <strong style="margin-top: 10px; display: block;">⚠️ How to Lose Points:</strong>
+        <ul>
+          <li>❌ -50 points if you ignore warnings and continue doom-scrolling</li>
         </ul>
       </div>
     `;

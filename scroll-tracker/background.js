@@ -54,13 +54,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Save to storage
     chrome.storage.local.set({ siteStats, totalRewardPoints });
     
-    sendResponse({ success: true });
+    sendResponse({ success: true, totalRewardPoints });
   } else if (message.type === 'GET_STATS') {
+    // Recalculate total points from all sites to ensure accuracy
+    totalRewardPoints = Object.values(siteStats).reduce((sum, site) => sum + (site.rewardPoints || 0), 0);
     sendResponse({ stats: siteStats, totalRewardPoints });
   } else if (message.type === 'RESET_STATS') {
+    // Don't reset reward points, only reset stats
+    const currentPoints = totalRewardPoints;
     siteStats = {};
-    totalRewardPoints = 0;
-    chrome.storage.local.set({ siteStats: {}, totalRewardPoints: 0 }, () => {
+    chrome.storage.local.set({ siteStats: {}, totalRewardPoints: currentPoints }, () => {
       // Notify all content scripts to reset their session data
       chrome.tabs.query({}, (tabs) => {
         tabs.forEach(tab => {
@@ -72,7 +75,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         });
       });
-      sendResponse({ success: true });
+      sendResponse({ success: true, totalRewardPoints: currentPoints });
     });
     return true; // Keep channel open for async response
   }

@@ -10,14 +10,19 @@ let actualScrollTime = 0; // Track actual time spent scrolling
 let rewardPoints = 0;
 let healthySessionTime = 0; // Time spent not doom-scrolling
 let lastHealthyCheck = Date.now();
+let warningShown = false;
+let warningTimestamp = 0;
+let scrollsSinceWarning = 0;
 
 const SCROLL_THRESHOLD = 100; // pixels
 const RAPID_SCROLL_TIME = 100; // ms
 const RAPID_SCROLL_LIMIT = 50; // rapid scrolls to trigger warning
 const CHECK_INTERVAL = 5000; // check every 5 seconds
 const INACTIVE_THRESHOLD = 3000; // 3 seconds of no scrolling = inactive
-const HEALTHY_SCROLL_RATE = 15; // scrolls per minute = healthy
+const HEALTHY_SCROLL_RATE = 150; // scrolls per minute = healthy
 const REWARD_CHECK_INTERVAL = 60000; // Check for rewards every minute
+const WARNING_GRACE_PERIOD = 10000; // 10 seconds after warning
+const PUNISHMENT_SCROLL_THRESHOLD = 20; // scrolls after warning = punishment
 
 // Detect if on shorts/reels
 function isOnShorts() {
@@ -44,6 +49,17 @@ window.addEventListener('scroll', () => {
     }
     lastScrollTime = now;
     lastActiveTime = now;
+    
+    // Track scrolls after warning
+    if (warningShown && (now - warningTimestamp) < WARNING_GRACE_PERIOD) {
+      scrollsSinceWarning++;
+      
+      // Punish user if they continue scrolling after warning
+      if (scrollsSinceWarning >= PUNISHMENT_SCROLL_THRESHOLD) {
+        punishUser();
+        scrollsSinceWarning = 0; // Reset counter
+      }
+    }
     
     lastScrollY = currentScrollY;
     
@@ -95,6 +111,69 @@ async function saveData() {
   chrome.runtime.sendMessage({ type: 'UPDATE_STATS', data });
 }
 
+// Punish user for ignoring warning
+function punishUser() {
+  const pointsLost = 50; // Lose 50 points for ignoring warning
+  rewardPoints = Math.max(0, rewardPoints - pointsLost); // Don't go below 0
+  
+  showPunishmentNotification(pointsLost);
+  saveData();
+}
+
+// Show punishment notification
+function showPunishmentNotification(points) {
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%);
+    color: white;
+    padding: 20px 25px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    z-index: 999999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    animation: shake 0.5s ease-out, slideInRight 0.5s ease-out;
+    max-width: 300px;
+  `;
+  
+  notification.innerHTML = `
+    <style>
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+        20%, 40%, 60%, 80% { transform: translateX(10px); }
+      }
+      @keyframes slideInRight {
+        from { transform: translateX(400px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(400px); opacity: 0; }
+      }
+    </style>
+    <div style="display: flex; align-items: center; gap: 15px;">
+      <div style="font-size: 32px;">⚠️</div>
+      <div>
+        <div style="font-weight: 600; font-size: 18px; margin-bottom: 5px;">
+          -${points} Points!
+        </div>
+        <div style="font-size: 13px; opacity: 0.9;">
+          You ignored the warning!
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.5s ease-out';
+    setTimeout(() => notification.remove(), 500);
+  }, 4000);
+}
 // Calculate and award rewards for healthy browsing
 function checkAndAwardRewards() {
   if (actualScrollTime === 0 || scrollCount === 0) return;
@@ -197,6 +276,11 @@ function showWarning() {
   const existing = document.getElementById('scroll-tracker-warning');
   if (existing) existing.remove();
   
+  // Mark that warning has been shown
+  warningShown = true;
+  warningTimestamp = Date.now();
+  scrollsSinceWarning = 0;
+  
   const warning = document.createElement('div');
   warning.id = 'scroll-tracker-warning';
   warning.style.cssText = `
@@ -233,6 +317,9 @@ function showWarning() {
     </p>
     <p style="margin: 0 0 20px 0; font-size: 14px; opacity: 0.9;">
       💡 Take a break to earn reward points!
+    </p>
+    <p style="margin: 0 0 20px 0; font-size: 13px; font-weight: 600; background: rgba(255,255,255,0.2); padding: 10px; border-radius: 10px;">
+      ⚠️ Warning: Continue scrolling = -50 points!
     </p>
     <div style="background: rgba(255,255,255,0.2); height: 4px; border-radius: 2px; margin-bottom: 20px; overflow: hidden;">
       <div style="background: white; height: 100%; animation: countdown 10s linear;"></div>
@@ -295,9 +382,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sessionStartTime = Date.now();
     lastActiveTime = Date.now();
     lastHealthyCheck = Date.now();
+    warningShown = false;
+    scrollsSinceWarning = 0;
     // Don't reset reward points - they persist
     saveData();
     sendResponse({ success: true });
+  } else if (message.type === 'GET_REWARD_POINTS') {
+    sendResponse({ rewardPoints });
   }
   return true;
 });
