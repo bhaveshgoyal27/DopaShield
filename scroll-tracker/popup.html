@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 400px;
+      min-height: 500px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 20px;
+    }
+    
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .subtitle {
+      font-size: 14px;
+      opacity: 0.9;
+      margin-bottom: 20px;
+    }
+    
+    .current-session {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-top: 15px;
+    }
+    
+    .stat-box {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    
+    .stat-value {
+      font-size: 28px;
+      font-weight: bold;
+      display: block;
+      margin-bottom: 5px;
+    }
+    
+    .stat-label {
+      font-size: 12px;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    
+    .site-list {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 15px;
+    }
+    
+    .site-item {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      transition: transform 0.2s;
+    }
+    
+    .site-item:hover {
+      transform: translateX(5px);
+      background: rgba(255, 255, 255, 0.15);
+    }
+    
+    .site-item:last-child {
+      margin-bottom: 0;
+    }
+    
+    .site-name {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .site-stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+    
+    .warning-badge {
+      background: #ff6b6b;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    
+    .reset-btn {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .reset-btn:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      opacity: 0.8;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+    }
+    
+    .scroll-score {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    
+    .score-high { background: #ff6b6b; }
+    .score-medium { background: #ffd93d; color: #333; }
+    .score-low { background: #6bcf7f; }
+  </style>
+</head>
+<body>
+  <h1>📊 Scroll Tracker</h1>
+  <p class="subtitle">Monitor your scrolling habits</p>
+  
+  <div id="content">
+    <div class="loading">Loading stats...</div>
+  </div>
+  
+  <button class="reset-btn" id="resetBtn">Reset All Stats</button>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
