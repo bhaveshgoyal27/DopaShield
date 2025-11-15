@@ -29,14 +29,25 @@ function getSiteIcon(hostname) {
   return '🌐';
 }
 
-function renderStats(stats) {
+function renderStats(stats, totalPoints = 0) {
   const content = document.getElementById('content');
+  
+  // Update total points display
+  document.getElementById('totalPoints').textContent = totalPoints;
   
   if (!stats || Object.keys(stats).length === 0) {
     content.innerHTML = `
       <div class="empty-state">
         <h3 style="margin-bottom: 10px;">No data yet</h3>
         <p>Visit YouTube, Instagram, TikTok, or LinkedIn to start tracking!</p>
+      </div>
+      <div class="rewards-info">
+        <strong>🎯 How to Earn Points:</strong>
+        <ul>
+          <li>⭐ 5 points per minute of healthy browsing (less than 15 scrolls/min)</li>
+          <li>🎁 25 bonus points for taking 5+ minute breaks</li>
+          <li>💎 Use points in the marketplace (coming soon!)</li>
+        </ul>
       </div>
     `;
     return;
@@ -54,13 +65,19 @@ function renderStats(stats) {
     if (currentStats && (currentStats.totalScrolls > 0 || currentStats.totalTime > 0)) {
       const score = getScrollScore(currentStats.totalScrolls, currentStats.totalTime);
       const scoreClass = getScoreClass(score);
+      const sitePoints = currentStats.rewardPoints || 0;
       
       html += `
         <div class="current-session">
           <h3 style="margin-bottom: 15px;">Current Session ${getSiteIcon(currentHostname)}</h3>
-          <div style="font-size: 14px; margin-bottom: 10px;">
-            ${currentHostname}
-            ${currentStats.onShorts ? '<span class="warning-badge">SHORTS/REELS</span>' : ''}
+          <div style="font-size: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <span>
+              ${currentHostname}
+              ${currentStats.onShorts ? '<span class="warning-badge">SHORTS/REELS</span>' : ''}
+            </span>
+            <span style="background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 12px; font-size: 12px;">
+              ⭐ ${sitePoints} pts
+            </span>
           </div>
           <div class="stat-grid">
             <div class="stat-box">
@@ -74,7 +91,7 @@ function renderStats(stats) {
           </div>
           <div style="margin-top: 15px; text-align: center;">
             ${score > 0 ? `<span class="scroll-score ${scoreClass}">
-              Score: ${score} scrolls/min
+              Score: ${score} scrolls/min ${score < 15 ? '✨' : ''}
             </span>` : '<span class="scroll-score score-low">No scrolling yet</span>'}
           </div>
         </div>
@@ -95,12 +112,16 @@ function renderStats(stats) {
       sortedSites.forEach(([hostname, data]) => {
         const score = getScrollScore(data.totalScrolls, data.totalTime);
         const scoreClass = getScoreClass(score);
+        const sitePoints = data.rewardPoints || 0;
         
         html += `
           <div class="site-item">
             <div class="site-name">
               ${getSiteIcon(hostname)} ${hostname}
               ${data.onShorts ? '<span class="warning-badge">SHORTS</span>' : ''}
+              <span style="margin-left: auto; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; font-size: 11px;">
+                ⭐ ${sitePoints}
+              </span>
             </div>
             <div class="site-stats">
               <span>${data.totalScrolls} scrolls</span>
@@ -108,7 +129,7 @@ function renderStats(stats) {
             </div>
             ${score > 0 ? `<div style="margin-top: 8px;">
               <span class="scroll-score ${scoreClass}" style="font-size: 11px; padding: 3px 8px;">
-                ${score} scrolls/min
+                ${score} scrolls/min ${score < 15 ? '✨' : ''}
               </span>
             </div>` : ''}
           </div>
@@ -118,33 +139,47 @@ function renderStats(stats) {
       html += `</div>`;
     }
     
+    // Add rewards info
+    html += `
+      <div class="rewards-info">
+        <strong>🎯 How to Earn Points:</strong>
+        <ul>
+          <li>⭐ 5 points per minute of healthy browsing (less than 15 scrolls/min)</li>
+          <li>🎁 25 bonus points for taking 5+ minute breaks</li>
+          <li>💎 Use points in the marketplace (coming soon!)</li>
+        </ul>
+      </div>
+    `;
+    
     content.innerHTML = html;
   });
 }
 
 // Load and display stats
 chrome.runtime.sendMessage({ type: 'GET_STATS' }, (response) => {
-  renderStats(response.stats);
+  renderStats(response.stats, response.totalRewardPoints || 0);
 });
 
 // Auto-refresh every 2 seconds
 setInterval(() => {
   chrome.runtime.sendMessage({ type: 'GET_STATS' }, (response) => {
-    renderStats(response.stats);
+    renderStats(response.stats, response.totalRewardPoints || 0);
   });
 }, 2000);
 
 // Reset button
 document.getElementById('resetBtn').addEventListener('click', () => {
-  if (confirm('Reset all tracking data? This will clear all stats and restart tracking.')) {
+  if (confirm('Reset all tracking data? This will clear all stats and restart tracking.\n\nNote: Your reward points will be kept!')) {
     chrome.runtime.sendMessage({ type: 'RESET_STATS' }, (response) => {
       if (response && response.success) {
+        // Get current points before clearing display
+        const currentPoints = parseInt(document.getElementById('totalPoints').textContent) || 0;
         // Clear the display immediately
-        renderStats({});
+        renderStats({}, currentPoints);
         // Reload after a short delay to show the reset worked
         setTimeout(() => {
           chrome.runtime.sendMessage({ type: 'GET_STATS' }, (response) => {
-            renderStats(response.stats);
+            renderStats(response.stats, response.totalRewardPoints || 0);
           });
         }, 500);
       }

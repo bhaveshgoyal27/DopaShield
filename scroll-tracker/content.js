@@ -7,12 +7,17 @@ let isActive = true;
 let rapidScrollCount = 0;
 let lastScrollTime = Date.now();
 let actualScrollTime = 0; // Track actual time spent scrolling
+let rewardPoints = 0;
+let healthySessionTime = 0; // Time spent not doom-scrolling
+let lastHealthyCheck = Date.now();
 
 const SCROLL_THRESHOLD = 100; // pixels
 const RAPID_SCROLL_TIME = 100; // ms
 const RAPID_SCROLL_LIMIT = 50; // rapid scrolls to trigger warning
 const CHECK_INTERVAL = 5000; // check every 5 seconds
 const INACTIVE_THRESHOLD = 3000; // 3 seconds of no scrolling = inactive
+const HEALTHY_SCROLL_RATE = 15; // scrolls per minute = healthy
+const REWARD_CHECK_INTERVAL = 60000; // Check for rewards every minute
 
 // Detect if on shorts/reels
 function isOnShorts() {
@@ -82,11 +87,93 @@ async function saveData() {
     rapidScrollCount,
     timeSpent: Math.floor(currentActiveTime), // Use actual active scroll time
     isOnShorts: isOnShorts(),
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    rewardPoints
   };
   
   // Send to background script
   chrome.runtime.sendMessage({ type: 'UPDATE_STATS', data });
+}
+
+// Calculate and award rewards for healthy browsing
+function checkAndAwardRewards() {
+  if (actualScrollTime === 0 || scrollCount === 0) return;
+  
+  const scrollRate = (scrollCount / actualScrollTime) * 60; // scrolls per minute
+  const timeSinceLastCheck = (Date.now() - lastHealthyCheck) / 1000 / 60; // minutes
+  
+  // Award points for healthy scrolling (not doom-scrolling)
+  if (scrollRate < HEALTHY_SCROLL_RATE && timeSinceLastCheck >= 1) {
+    const pointsEarned = Math.floor(timeSinceLastCheck * 5); // 5 points per minute of healthy browsing
+    rewardPoints += pointsEarned;
+    
+    if (pointsEarned > 0) {
+      showRewardNotification(pointsEarned);
+    }
+    
+    lastHealthyCheck = Date.now();
+    saveData();
+  }
+  
+  // Award bonus points for taking breaks (no scrolling for 5+ minutes)
+  const minutesSinceLastScroll = (Date.now() - lastScrollTime) / 1000 / 60;
+  if (minutesSinceLastScroll >= 5 && scrollCount > 0) {
+    const breakBonus = 25;
+    rewardPoints += breakBonus;
+    showRewardNotification(breakBonus, true);
+    lastScrollTime = Date.now(); // Reset to avoid duplicate rewards
+    saveData();
+  }
+}
+
+// Show reward notification
+function showRewardNotification(points, isBreakBonus = false) {
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+    padding: 20px 25px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    z-index: 999999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    animation: slideInRight 0.5s ease-out;
+    max-width: 300px;
+  `;
+  
+  notification.innerHTML = `
+    <style>
+      @keyframes slideInRight {
+        from { transform: translateX(400px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(400px); opacity: 0; }
+      }
+    </style>
+    <div style="display: flex; align-items: center; gap: 15px;">
+      <div style="font-size: 32px;">${isBreakBonus ? '🎁' : '⭐'}</div>
+      <div>
+        <div style="font-weight: 600; font-size: 18px; margin-bottom: 5px;">
+          +${points} Points!
+        </div>
+        <div style="font-size: 13px; opacity: 0.9;">
+          ${isBreakBonus ? 'Break time bonus!' : 'Healthy browsing!'}
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  setTimeout(() => {
+    notification.style.animation = 'slideOutRight 0.5s ease-out';
+    setTimeout(() => notification.remove(), 500);
+  }, 3000);
 }
 
 // Check for excessive scrolling
@@ -135,11 +222,21 @@ function showWarning() {
         0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; }
         100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
       }
+      @keyframes countdown {
+        from { width: 100%; }
+        to { width: 0%; }
+      }
     </style>
     <h2 style="margin: 0 0 15px 0; font-size: 28px;">⚠️ Hey There!</h2>
     <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.5;">
       You've been scrolling quite a bit! Time for a break?
     </p>
+    <p style="margin: 0 0 20px 0; font-size: 14px; opacity: 0.9;">
+      💡 Take a break to earn reward points!
+    </p>
+    <div style="background: rgba(255,255,255,0.2); height: 4px; border-radius: 2px; margin-bottom: 20px; overflow: hidden;">
+      <div style="background: white; height: 100%; animation: countdown 10s linear;"></div>
+    </div>
     <button id="scroll-tracker-dismiss" style="
       background: white;
       color: #667eea;
@@ -160,18 +257,19 @@ function showWarning() {
     setTimeout(() => warning.remove(), 200);
   });
   
-  // Auto-dismiss after 5 seconds
+  // Auto-dismiss after 10 seconds (changed from 5)
   setTimeout(() => {
     if (warning.parentNode) {
       warning.style.animation = 'popIn 0.2s reverse';
       setTimeout(() => warning.remove(), 200);
     }
-  }, 5000);
+  }, 10000);
 }
 
 // Periodic checks
 setInterval(checkScrollingBehavior, CHECK_INTERVAL);
 setInterval(updateTimeSpent, 10000);
+setInterval(checkAndAwardRewards, REWARD_CHECK_INTERVAL);
 
 // Handle visibility changes
 document.addEventListener('visibilitychange', () => {
@@ -196,6 +294,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     actualScrollTime = 0;
     sessionStartTime = Date.now();
     lastActiveTime = Date.now();
+    lastHealthyCheck = Date.now();
+    // Don't reset reward points - they persist
     saveData();
     sendResponse({ success: true });
   }

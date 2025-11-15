@@ -1,26 +1,33 @@
 // Background service worker
 let siteStats = {};
+let totalRewardPoints = 0;
 
 // Initialize storage
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.get(['siteStats'], (result) => {
+  chrome.storage.local.get(['siteStats', 'totalRewardPoints'], (result) => {
     if (result.siteStats) {
       siteStats = result.siteStats;
+    }
+    if (result.totalRewardPoints) {
+      totalRewardPoints = result.totalRewardPoints;
     }
   });
 });
 
 // Load stats on startup
-chrome.storage.local.get(['siteStats'], (result) => {
+chrome.storage.local.get(['siteStats', 'totalRewardPoints'], (result) => {
   if (result.siteStats) {
     siteStats = result.siteStats;
+  }
+  if (result.totalRewardPoints) {
+    totalRewardPoints = result.totalRewardPoints;
   }
 });
 
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'UPDATE_STATS') {
-    const { hostname, scrollCount, rapidScrollCount, timeSpent, isOnShorts } = message.data;
+    const { hostname, scrollCount, rapidScrollCount, timeSpent, isOnShorts, rewardPoints } = message.data;
     
     if (!siteStats[hostname]) {
       siteStats[hostname] = {
@@ -28,7 +35,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         totalRapidScrolls: 0,
         totalTime: 0,
         lastVisit: Date.now(),
-        onShorts: isOnShorts
+        onShorts: isOnShorts,
+        rewardPoints: 0
       };
     }
     
@@ -38,16 +46,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     siteStats[hostname].totalTime = timeSpent;
     siteStats[hostname].lastVisit = Date.now();
     siteStats[hostname].onShorts = isOnShorts;
+    siteStats[hostname].rewardPoints = rewardPoints;
+    
+    // Calculate total reward points across all sites
+    totalRewardPoints = Object.values(siteStats).reduce((sum, site) => sum + (site.rewardPoints || 0), 0);
     
     // Save to storage
-    chrome.storage.local.set({ siteStats });
+    chrome.storage.local.set({ siteStats, totalRewardPoints });
     
     sendResponse({ success: true });
   } else if (message.type === 'GET_STATS') {
-    sendResponse({ stats: siteStats });
+    sendResponse({ stats: siteStats, totalRewardPoints });
   } else if (message.type === 'RESET_STATS') {
     siteStats = {};
-    chrome.storage.local.set({ siteStats: {} }, () => {
+    totalRewardPoints = 0;
+    chrome.storage.local.set({ siteStats: {}, totalRewardPoints: 0 }, () => {
       // Notify all content scripts to reset their session data
       chrome.tabs.query({}, (tabs) => {
         tabs.forEach(tab => {
